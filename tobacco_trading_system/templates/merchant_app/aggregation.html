@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}Aggregation - {{ merchant.company_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold">Aggregations</h1>
+      <p class="text-gray-600">Create rules and generate aggregated grades</p>
+    </div>
+    <button class="bg-primary-600 text-white px-4 py-2 rounded" onclick="openRuleModal()">
+      <i class="fas fa-plus mr-2"></i>New Rule
+    </button>
+  </div>
+
+  <!-- Rules -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-8">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <h3 class="text-lg font-medium">Rules</h3>
+    </div>
+    <div class="p-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for rule in rules %}
+        <div class="border rounded p-4">
+          <div class="flex justify-between items-start">
+            <div>
+              <div class="font-semibold">{{ rule.name }}</div>
+              <div class="text-xs text-gray-500">{{ rule.get_rule_type_display|default:rule.rule_type }}</div>
+            </div>
+            <div>
+              <span class="text-xs px-2 py-1 rounded {{ rule.is_active|yesno:'bg-green-100 text-green-700,bg-gray-100 text-gray-700' }}">
+                {{ rule.is_active|yesno:'Active,Inactive' }}
+              </span>
+            </div>
+          </div>
+          {% if rule.description %}
+          <div class="text-sm text-gray-600 mt-2">{{ rule.description }}</div>
+          {% endif %}
+          <div class="mt-4 flex gap-2">
+            <button class="text-blue-600" onclick="runRule({{ rule.id }})"><i class="fas fa-play mr-1"></i>Run</button>
+            <button class="text-indigo-600" onclick="editRule({{ rule.id }})"><i class="fas fa-edit mr-1"></i>Edit</button>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-gray-500">No rules yet. Create one to get started.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Outputs -->
+  <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <h3 class="text-lg font-medium">Latest Aggregated Grades</h3>
+    </div>
+    <div class="p-6">
+      <div id="outputs" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {% for out in outputs %}
+        <div class="border rounded p-4">
+          <div class="font-semibold">{{ out.name }}</div>
+          <div class="text-xs text-gray-500">{{ out.rule_set.name }} • {{ out.computed_at|date:'M d, Y H:i' }}</div>
+          <div class="mt-2 text-sm">Total Achievable: {{ out.total_quantity_kg|floatformat:0 }} kg</div>
+          <div class="mt-2">
+            <button class="text-blue-600" onclick="viewAggregated({{ out.id }})"><i class="fas fa-eye mr-1"></i>Details</button>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-gray-500">No outputs yet. Run a rule to generate aggregated grades.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rule Modal -->
+<div id="ruleModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 class="text-lg font-medium">Aggregation Rule</h3>
+      </div>
+      <form id="ruleForm" class="p-6">
+        {% csrf_token %}
+        <input type="hidden" name="id" id="rule_id">
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm mb-1">Name</label>
+            <input class="w-full border rounded px-3 py-2" name="name" id="rule_name" required />
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Type</label>
+            <select class="w-full border rounded px-3 py-2" name="rule_type" id="rule_type" required>
+              <option value="AI_TREND">AI_TREND (market trends)</option>
+              <option value="AI_SPEC">AI_SPEC (user specification)</option>
+              <option value="USER_RULE">USER_RULE (manual composition)</option>
+              <option value="AI_CLIENT_DEMAND">AI_CLIENT_DEMAND (orders)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Description</label>
+            <textarea class="w-full border rounded px-3 py-2" name="description" id="rule_description"></textarea>
+          </div>
+          <div>
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="checkbox" id="rule_limit" /> Limit to current inventory
+            </label>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-end gap-2">
+          <button type="button" class="px-4 py-2 border rounded" onclick="closeRuleModal()">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div id="detailModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+  <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+      <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <h3 class="text-lg font-medium">Aggregated Grade Details</h3>
+        <button class="text-gray-500" onclick="closeDetailModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="detailContent" class="p-6 text-sm"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openRuleModal() { document.getElementById('ruleModal').classList.remove('hidden'); }
+function closeRuleModal() { document.getElementById('ruleModal').classList.add('hidden'); document.getElementById('ruleForm').reset(); }
+function viewAggregated(id) {
+  fetch(`/merchant/aggregation/output/${id}/`).then(r => r.json()).then(resp => {
+    if (!resp.success) return;
+    const g = resp.grade;
+    document.getElementById('detailContent').innerHTML = `
+      <div class="space-y-3">
+        <div><span class="font-medium">Name:</span> ${g.name}</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><span class="text-gray-500">Total Achievable</span><div class="font-medium">${g.total_quantity_kg.toFixed(2)} kg</div></div>
+          <div><span class="text-gray-500">Estimated Nicotine</span><div class="font-medium">${g.characteristics.estimated_nicotine_min}% - ${g.characteristics.estimated_nicotine_max}%</div></div>
+        </div>
+        <div class="mt-2">
+          <div class="font-medium mb-2">Composition</div>
+          ${g.components.map(c => `<div class="flex justify-between border-b py-1"><div>${c.base_grade_code} - ${c.base_grade_name}</div><div>${c.percentage}% • ${c.kilograms} kg</div></div>`).join('')}
+        </div>
+      </div>`;
+    document.getElementById('detailModal').classList.remove('hidden');
+  });
+}
+function closeDetailModal() { document.getElementById('detailModal').classList.add('hidden'); }
+
+// Save rule
+const ruleForm = document.getElementById('ruleForm');
+ruleForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    id: document.getElementById('rule_id').value || undefined,
+    name: document.getElementById('rule_name').value,
+    rule_type: document.getElementById('rule_type').value,
+    description: document.getElementById('rule_description').value,
+    limit_to_inventory: document.getElementById('rule_limit').checked,
+  };
+  const res = await fetch('/merchant/aggregation/rule/save/', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (data.success) { closeRuleModal(); location.reload(); } else { window.timbRealTime.showNotification(data.error || 'Failed', 'error'); }
+});
+
+async function runRule(id) {
+  const res = await fetch(`/merchant/aggregation/rule/${id}/run/`, { method: 'POST', headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value } });
+  const data = await res.json();
+  if (data.success) { window.timbRealTime.showNotification(`Generated ${data.generated} aggregated grades`, 'success'); setTimeout(() => location.reload(), 800); }
+  else { window.timbRealTime.showNotification(data.error || 'Run failed', 'error'); }
+}
+
+function editRule(id) {
+  // Simple redirect or could fetch and populate modal in future
+  window.timbRealTime.showNotification('Edit rule in modal coming soon', 'info');
+}
+</script>
+{% endblock %}

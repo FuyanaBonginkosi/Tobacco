@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Load grades for the add inventory modal
 async function loadGrades() {
     try {
-        const response = await fetch('/api/grades/');
+        const response = await fetch('/merchant/api/grades/');
         const data = await response.json();
         
         const gradeSelect = document.getElementById('grade_id');
@@ -505,16 +505,17 @@ async function generateInventoryReport() {
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
             }
         });
-        
-        if (response.ok) {
-            const blob = await response.blob();
+        const json = await response.json();
+        if (json.success) {
+            const csv = ['Grade,Name,Quantity (kg),Avg Cost,Total Value,Location'];
+            json.items.forEach(i => csv.push(`${i.grade},${i.name},${i.quantity},${i.avg_cost},${i.total_value},${i.location||''}`));
+            const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `inventory-report-${new Date().toISOString().split('T')[0]}.pdf`;
+            a.download = `inventory-report-${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
             window.URL.revokeObjectURL(url);
-            
             window.timbRealTime.showNotification('Report downloaded successfully!', 'success');
         } else {
             window.timbRealTime.showNotification('Failed to generate report', 'error');

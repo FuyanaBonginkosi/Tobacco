@@ -13,6 +13,7 @@ urlpatterns = [
     path('inventory/', views.inventory_management, name='merchant_inventory'),
     path('inventory/add/', views.add_inventory_item, name='merchant_add_inventory'),
     path('inventory/qr-report/', views.generate_qr_report, name='merchant_generate_qr_report'),
+    path('inventory/report/', views.inventory_report, name='merchant_inventory_report'),
     
     # Custom Grades
     path('grades/', views.custom_grades_management, name='merchant_custom_grades'),
@@ -27,6 +28,12 @@ urlpatterns = [
     path('ai/recommendations/<int:recommendation_id>/implement/', views.implement_recommendation, name='merchant_implement_recommendation'),
     path('farmer-risk/', views.farmer_risk_assessment, name='merchant_farmer_risk_assessment'),
     
+    # Aggregation
+    path('aggregation/', views.aggregation_dashboard, name='merchant_aggregation_dashboard'),
+    path('aggregation/rule/save/', views.save_aggregation_rule, name='merchant_save_aggregation_rule'),
+    path('aggregation/rule/<int:rule_id>/run/', views.run_aggregation_rule, name='merchant_run_aggregation_rule'),
+    path('aggregation/output/<int:aggregated_id>/', views.aggregated_grade_detail, name='merchant_aggregated_grade_detail'),
+
     # Inter-Merchant Features
     path('communications/', views.inter_merchant_communications, name='merchant_communications'),
     path('communications/send/', views.send_message, name='merchant_send_message'),
@@ -36,4 +43,8 @@ urlpatterns = [
     # API Endpoints
     path('api/dashboard-data/', views.api_dashboard_data, name='merchant_api_dashboard_data'),
     path('api/price-alerts/', views.api_price_alerts, name='merchant_api_price_alerts'),
+    path('api/grades/', views.api_list_grades, name='merchant_api_list_grades'),
+    path('api/orders/<int:order_id>/', views.api_order_detail, name='merchant_api_order_detail'),
+    path('api/orders/<int:order_id>/available-inventory/', views.api_order_available_inventory, name='merchant_api_order_available_inventory'),
+    path('api/orders/<int:order_id>/process/', views.api_order_process, name='merchant_api_order_process'),
 ]

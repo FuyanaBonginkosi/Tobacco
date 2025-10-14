@@ -14,6 +14,9 @@ from .models import (
     InterMerchantCommunication,
     InterMerchantTrade,
     PurchaseRecommendation,
+    AggregationRuleSet,
+    AggregatedGrade,
+    AggregatedGradeComponent,
 )
 
 
@@ -727,6 +730,26 @@ class AggregationRuleAdmin(admin.ModelAdmin):
         'source_field'
     )
 
+
+@admin.register(AggregationRuleSet)
+class AggregationRuleSetAdmin(admin.ModelAdmin):
+    list_display = ('name', 'merchant', 'rule_type', 'is_active', 'created_at')
+    list_filter = ('rule_type', 'is_active', 'created_at', 'merchant')
+    search_fields = ('name', 'merchant__company_name')
+
+
+@admin.register(AggregatedGrade)
+class AggregatedGradeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'merchant', 'rule_set', 'total_quantity_kg', 'computed_at')
+    list_filter = ('merchant', 'rule_set__rule_type', 'computed_at')
+    search_fields = ('name', 'rule_set__name', 'merchant__company_name')
+
+
+@admin.register(AggregatedGradeComponent)
+class AggregatedGradeComponentAdmin(admin.ModelAdmin):
+    list_display = ('aggregated_grade', 'base_grade', 'percentage', 'kilograms')
+    list_filter = ('base_grade__category',)
+    search_fields = ('aggregated_grade__name', 'base_grade__grade_code')
 
 @admin.register(DashboardWidget)
 class DashboardWidgetAdmin(admin.ModelAdmin):

@@ -72,7 +72,7 @@
             
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
-                <input type="hidden" name="action" value="update_branding">
+                <input type="hidden" name="section" value="branding">
                 
                 <div class="row">
                     <div class="col-md-6 mb-4">
@@ -165,7 +165,7 @@
             
             <form method="post">
                 {% csrf_token %}
-                <input type="hidden" name="action" value="update_contact">
+                <input type="hidden" name="section" value="contact">
                 
                 <div class="row">
                     <div class="col-md-6 mb-3">
@@ -206,7 +206,7 @@
             
             <form method="post">
                 {% csrf_token %}
-                <input type="hidden" name="action" value="update_visibility">
+                <input type="hidden" name="section" value="visibility">
                 
                 <div class="row">
                     <div class="col-12 mb-4">

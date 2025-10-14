@@ -1,6 +1,7 @@
 from django.db.models import Q, F, Sum, Avg
 from timb_dashboard.models import TobaccoGrade, Transaction
 from merchant_app.models import MerchantInventory, CustomGrade
+from merchant_app.models import AggregatedGrade
 from decimal import Decimal
 import pandas as pd
 from datetime import datetime, timedelta
@@ -32,6 +33,10 @@ class TIMBGradeRecommendationEngine:
         # Analyze seasonal opportunities
         seasonal_recommendations = self._analyze_seasonal_opportunities()
         recommendations.extend(seasonal_recommendations)
+
+        # Consider aggregated grades demand coverage vs inventory
+        aggregated_recommendations = self._analyze_aggregated_grade_coverage()
+        recommendations.extend(aggregated_recommendations)
         
         # Sort by priority and return top recommendations
         recommendations = sorted(recommendations, key=lambda x: x['priority_score'], reverse=True)
@@ -95,6 +100,30 @@ class TIMBGradeRecommendationEngine:
                         'risk_level': 'LOW'
                     })
         
+        return recommendations
+
+    def _analyze_aggregated_grade_coverage(self):
+        """Recommend base grades missing to realize recent aggregated outputs."""
+        recommendations = []
+        recent_outputs = AggregatedGrade.objects.filter(merchant=self.merchant).order_by('-computed_at')[:10]
+        inv_map = {
+            i.grade_id: i.quantity for i in MerchantInventory.objects.filter(merchant=self.merchant)
+        }
+        for agg in recent_outputs:
+            for comp in agg.components.select_related('base_grade'):
+                needed = float(comp.kilograms)
+                have = float(inv_map.get(comp.base_grade_id, 0))
+                if needed > 0 and have < needed:
+                    short = max(0.0, needed - have)
+                    recommendations.append({
+                        'type': 'AGGREGATED_COMPONENT_GAP',
+                        'grade': comp.base_grade,
+                        'reason': f'Missing component for aggregated "{agg.name}"',
+                        'recommended_quantity': int(short),
+                        'estimated_cost': float(comp.base_grade.base_price) * short,
+                        'priority_score': 8.2,
+                        'risk_level': 'LOW',
+                    })
         return recommendations
     
     def _analyze_market_trends(self):

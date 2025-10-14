@@ -869,6 +869,114 @@ class InterMerchantTrade(models.Model):
 
 
 
+class AggregationRuleSet(models.Model):
+    """Merchant-configurable rule set for generating aggregated grades.
+
+    Four rule types are supported:
+    - AI_TREND: AI aggregates based on TIMB grade trends (e.g., by category/price clusters)
+    - AI_SPEC: AI aggregates to match a user-described spec (color, position, nicotine, end product)
+    - USER_RULE: Explicit user-defined composition rules
+    - AI_CLIENT_DEMAND: AI aggregates to satisfy active client order demand
+    """
+
+    RULE_TYPES = [
+        ("AI_TREND", "AI aggregation - market trends"),
+        ("AI_SPEC", "AI aggregation - user specification"),
+        ("USER_RULE", "User-defined aggregation rule"),
+        ("AI_CLIENT_DEMAND", "AI aggregation - client demand"),
+    ]
+
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="aggregation_rule_sets")
+    name = models.CharField(max_length=120)
+    rule_type = models.CharField(max_length=20, choices=RULE_TYPES)
+    description = models.TextField(blank=True)
+    # Arbitrary parameters depending on rule type (e.g., desired color, nicotine range, end product, constraints)
+    parameters = models.JSONField(default=dict, blank=True)
+
+    # Whether to limit results to current inventory (otherwise consider all TIMB grades first)
+    limit_to_inventory = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Aggregation Rule Set"
+        verbose_name_plural = "Aggregation Rule Sets"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["merchant", "rule_type", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.merchant.company_name} - {self.name} ({self.rule_type})"
+
+
+class AggregatedGrade(models.Model):
+    """Aggregated grade output produced by a rule run.
+
+    Stores the calculated composition by TIMB grades along with derived
+    characteristics (e.g., color, expected nicotine range) and quantity plan.
+    """
+
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="aggregated_grades")
+    rule_set = models.ForeignKey(AggregationRuleSet, on_delete=models.CASCADE, related_name="outputs")
+
+    # Identity
+    name = models.CharField(max_length=120)
+    label = models.CharField(max_length=120, blank=True)
+
+    # Derived characteristics (summary the UI can render)
+    characteristics = models.JSONField(default=dict, blank=True)
+
+    # Quantity planning (computed using inventory snapshot when applicable)
+    total_quantity_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    inventory_snapshot = models.JSONField(default=dict, blank=True)
+
+    # Timestamps
+    computed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-computed_at", "name"]
+        indexes = [
+            models.Index(fields=["merchant", "-computed_at"]),
+            models.Index(fields=["rule_set", "-computed_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.merchant.company_name})"
+
+    @property
+    def composition_percentages(self):
+        """Return {grade_id: percentage} mapping from components."""
+        percentages = {}
+        for c in self.components.all():
+            percentages[c.base_grade_id] = float(c.percentage)
+        return percentages
+
+
+class AggregatedGradeComponent(models.Model):
+    """Normalized composition of an aggregated grade by base TIMB grades."""
+
+    aggregated_grade = models.ForeignKey(
+        AggregatedGrade,
+        on_delete=models.CASCADE,
+        related_name="components",
+    )
+    base_grade = models.ForeignKey(TobaccoGrade, on_delete=models.CASCADE)
+    percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    kilograms = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        unique_together = ["aggregated_grade", "base_grade"]
+        verbose_name = "Aggregated Grade Component"
+        verbose_name_plural = "Aggregated Grade Components"
+
+    def __str__(self):
+        return f"{self.aggregated_grade.name} - {self.base_grade.grade_code} ({self.percentage}%)"
+
 class AIRecommendation(models.Model):
     """AI-generated recommendations for merchants"""
     RECOMMENDATION_TYPES = [

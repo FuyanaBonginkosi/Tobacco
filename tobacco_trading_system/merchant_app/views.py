@@ -15,7 +15,8 @@ from timb_dashboard.models import Merchant, TobaccoGrade, Transaction
 from .models import (
     MerchantProfile, MerchantInventory, CustomGrade, GradeComponent,
     ClientOrder, FarmerRiskAssessment, PurchaseRecommendation,
-    DashboardWidget, InterMerchantCommunication, InterMerchantTrade
+    DashboardWidget, InterMerchantCommunication, InterMerchantTrade,
+    AggregationRuleSet, AggregatedGrade
 )
 
 # AI integration
@@ -451,6 +452,153 @@ def orders_management(request):
     return render(request, 'merchant_app/orders.html', context)
 
 
+# ---------------------- Aggregation: rules and runs ----------------------
+
+@login_required
+@require_http_methods(["GET"])  # List rule sets and latest outputs
+def aggregation_dashboard(request):
+    if not request.user.is_merchant:
+        return redirect('home')
+    merchant = request.user.merchant_profile
+    rules = AggregationRuleSet.objects.filter(merchant=merchant).order_by('-created_at')
+    outputs = AggregatedGrade.objects.filter(merchant=merchant).select_related('rule_set').order_by('-computed_at')[:20]
+    return render(request, 'merchant_app/aggregation.html', {
+        'merchant': merchant,
+        'rules': rules,
+        'outputs': outputs,
+    })
+
+
+@login_required
+@require_http_methods(["POST"])  # Create or update rule sets
+def save_aggregation_rule(request):
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    merchant = request.user.merchant_profile
+    try:
+        data = json.loads(request.body)
+        rule_id = data.get('id')
+        payload = {
+            'name': data['name'],
+            'rule_type': data['rule_type'],
+            'description': data.get('description', ''),
+            'parameters': data.get('parameters', {}),
+            'limit_to_inventory': bool(data.get('limit_to_inventory', False)),
+            'is_active': bool(data.get('is_active', True)),
+        }
+        if rule_id:
+            rule = AggregationRuleSet.objects.get(id=rule_id, merchant=merchant)
+            for k, v in payload.items():
+                setattr(rule, k, v)
+            rule.save()
+        else:
+            rule = AggregationRuleSet.objects.create(merchant=merchant, **payload)
+        return JsonResponse({'success': True, 'rule_id': rule.id})
+    except AggregationRuleSet.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Rule not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(["POST"])  # Run rule set to generate outputs
+def run_aggregation_rule(request, rule_id):
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    from .aggregation_engine import run_rule_set
+    merchant = request.user.merchant_profile
+    try:
+        rule = AggregationRuleSet.objects.get(id=rule_id, merchant=merchant, is_active=True)
+        outputs = run_rule_set(rule)
+        return JsonResponse({
+            'success': True,
+            'generated': len(outputs),
+            'output_ids': [o.id for o in outputs]
+        })
+    except AggregationRuleSet.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Rule not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(["GET"])  # Details of a specific aggregated grade
+def aggregated_grade_detail(request, aggregated_id):
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    merchant = request.user.merchant_profile
+    try:
+        agg = AggregatedGrade.objects.select_related('rule_set').prefetch_related('components__base_grade').get(
+            id=aggregated_id, merchant=merchant
+        )
+        return JsonResponse({
+            'success': True,
+            'grade': {
+                'id': agg.id,
+                'name': agg.name,
+                'label': agg.label,
+                'characteristics': agg.characteristics,
+                'total_quantity_kg': float(agg.total_quantity_kg),
+                'computed_at': agg.computed_at.isoformat(),
+                'rule': {'id': agg.rule_set.id, 'name': agg.rule_set.name, 'type': agg.rule_set.rule_type},
+                'components': [
+                    {
+                        'base_grade_code': c.base_grade.grade_code,
+                        'base_grade_name': c.base_grade.grade_name,
+                        'percentage': float(c.percentage),
+                        'kilograms': float(c.kilograms),
+                    }
+                    for c in agg.components.all()
+                ],
+            }
+        })
+    except AggregatedGrade.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Aggregated grade not found'}, status=404)
+
+
+# ---------------------- Utility APIs used by templates ----------------------
+
+@login_required
+@require_http_methods(["GET"])  # Provide list of grades for inventory modal
+def api_list_grades(request):
+    grades = TobaccoGrade.objects.filter(is_active=True).order_by('category', 'grade_code')
+    return JsonResponse({
+        'success': True,
+        'grades': [
+            {
+                'id': g.id,
+                'grade_code': g.grade_code,
+                'grade_name': g.grade_name,
+                'category': g.category,
+                'base_price': float(g.base_price),
+            }
+            for g in grades
+        ]
+    })
+
+
+@login_required
+@require_http_methods(["POST"])  # Inventory export stub
+def inventory_report(request):
+    # For now, return JSON; in production, generate PDF/CSV
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    merchant = request.user.merchant_profile
+    items = MerchantInventory.objects.filter(merchant=merchant).select_related('grade')
+    data = [
+        {
+            'grade': i.grade.grade_code,
+            'name': i.grade.grade_name,
+            'quantity': float(i.quantity),
+            'avg_cost': float(i.average_cost),
+            'total_value': float(i.total_value),
+            'location': i.storage_location,
+        }
+        for i in items
+    ]
+    return JsonResponse({'success': True, 'items': data})
+
+
 @login_required
 @require_http_methods(["POST"])
 def create_order(request):
@@ -788,6 +936,79 @@ def ai_recommendations(request):
     }
     
     return render(request, 'merchant_app/ai_recommendations.html', context)
+
+
+# ---------------------- Order APIs used by template ----------------------
+
+@login_required
+@require_http_methods(["GET"])  # Order detail JSON
+def api_order_detail(request, order_id):
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    merchant = request.user.merchant_profile
+    try:
+        order = ClientOrder.objects.select_related('grade', 'custom_grade').get(id=order_id, merchant=merchant)
+        return JsonResponse({
+            'success': True,
+            'order_number': order.order_number,
+            'client_name': order.client_name,
+            'status': order.status,
+            'created_at': order.created_at.isoformat(),
+            'delivery_date': order.expected_delivery_date.isoformat() if order.expected_delivery_date else None,
+            'requested_quantity': float(order.requested_quantity),
+            'filled_quantity': float(order.filled_quantity),
+            'target_price': float(order.target_price),
+        })
+    except ClientOrder.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+
+
+@login_required
+@require_http_methods(["GET"])  # Available inventory to fulfill order
+def api_order_available_inventory(request, order_id):
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    merchant = request.user.merchant_profile
+    try:
+        order = ClientOrder.objects.get(id=order_id, merchant=merchant)
+    except ClientOrder.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
+    items = MerchantInventory.objects.filter(merchant=merchant).select_related('grade')
+    data = [{
+        'id': i.id,
+        'grade': i.grade.grade_code,
+        'quantity': float(i.available_quantity),
+        'location': i.storage_location,
+    } for i in items]
+    return JsonResponse({'success': True, 'inventory': data})
+
+
+@login_required
+@require_http_methods(["POST"])  # Process fulfilling quantity from inventory
+def api_order_process(request, order_id):
+    if not request.user.is_merchant:
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    merchant = request.user.merchant_profile
+    try:
+        order = ClientOrder.objects.select_for_update().get(id=order_id, merchant=merchant)
+        data = json.loads(request.body)
+        fill_qty = Decimal(str(data.get('fill_quantity', 0)))
+        source_inventory_id = data.get('source_inventory')
+        inv = MerchantInventory.objects.select_for_update().get(id=source_inventory_id, merchant=merchant)
+        if fill_qty <= 0 or fill_qty > inv.available_quantity:
+            return JsonResponse({'success': False, 'error': 'Invalid quantity'}, status=400)
+        inv.reserved_quantity += fill_qty
+        inv.quantity -= fill_qty
+        inv.save()
+        order.filled_quantity += fill_qty
+        if order.filled_quantity >= order.requested_quantity:
+            order.status = 'READY'
+        else:
+            order.status = 'IN_PROGRESS'
+        order.save()
+        return JsonResponse({'success': True})
+    except (ClientOrder.DoesNotExist, MerchantInventory.DoesNotExist):
+        return JsonResponse({'success': False, 'error': 'Not found'}, status=404)
 
 
 @login_required
