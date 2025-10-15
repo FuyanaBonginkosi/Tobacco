@@ -47,6 +47,10 @@ class RealTimePrice(models.Model):
         ordering = ['grade__category', 'grade__grade_code']
         verbose_name = 'Real-Time Price'
         verbose_name_plural = 'Real-Time Prices'
+        indexes = [
+            models.Index(fields=['grade', 'floor']),
+            models.Index(fields=['-last_updated']),
+        ]
     
     def __str__(self):
         return f"{self.grade.grade_name} - ${self.current_price}"
@@ -130,6 +134,8 @@ class LiveTransaction(models.Model):
             models.Index(fields=['is_broadcast', 'timestamp']),
             models.Index(fields=['is_flagged']),
         ]
+        verbose_name = 'Live Transaction'
+        verbose_name_plural = 'Live Transactions'
     
     def __str__(self):
         return f"{self.transaction_id} - {self.grade.grade_name} ({self.quantity}kg)"

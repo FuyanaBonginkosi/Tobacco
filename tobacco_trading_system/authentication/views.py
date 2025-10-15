@@ -121,65 +121,9 @@ def logout_view(request):
 
 
 def register_view(request):
-    """Enhanced user registration"""
-    if request.method == 'POST':
-        try:
-            # Extract user data
-            username = request.POST.get('username')
-            email = request.POST.get('email')
-            password = request.POST.get('password')
-            password_confirm = request.POST.get('password_confirm')
-            first_name = request.POST.get('first_name')
-            last_name = request.POST.get('last_name')
-            phone = request.POST.get('phone')
-            user_type = request.POST.get('user_type')
-            
-            # Validation
-            if password != password_confirm:
-                messages.error(request, 'Passwords do not match.')
-                return render(request, 'authentication/register.html')
-            
-            if User.objects.filter(username=username).exists():
-                messages.error(request, 'Username already exists.')
-                return render(request, 'authentication/register.html')
-            
-            if User.objects.filter(email=email).exists():
-                messages.error(request, 'Email already registered.')
-                return render(request, 'authentication/register.html')
-            
-            # Create user
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                phone=phone,
-                is_merchant=(user_type == 'merchant'),
-                is_timb_staff=(user_type == 'timb_staff')
-            )
-            
-            # Generate verification token
-            verification_token = secrets.token_urlsafe(50)
-            user.verification_token = verification_token
-            user.verification_sent_at = timezone.now()
-            user.save()
-            
-            # Send verification email
-            send_verification_email(user, verification_token)
-            
-            # Log security event
-            ip_address = get_client_ip(request)
-            user_agent = request.META.get('HTTP_USER_AGENT', '')
-            log_security_event(user, 'REGISTRATION', 'New user registered', ip_address, user_agent)
-            
-            messages.success(request, 'Registration successful! Please check your email to verify your account.')
-            return redirect('login')
-            
-        except Exception as e:
-            messages.error(request, f'Registration failed: {str(e)}')
-    
-    return render(request, 'authentication/register.html')
+    """Registration disabled. Accounts must be created by superuser."""
+    messages.error(request, 'Self-registration is disabled. Contact TIMB admin to create an account.')
+    return redirect('login')
 
 
 @login_required

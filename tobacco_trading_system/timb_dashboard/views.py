@@ -16,6 +16,7 @@ from .models import (
     DashboardMetric, SystemAlert, UserSession
 )
 from authentication.models import User
+from django.db import models
 
 
 def is_timb_staff(user):
@@ -67,21 +68,11 @@ def dashboard_view(request):
     
     volume_trends.reverse()
     
-    # Yield prediction (sample data)
-    yield_prediction = {
-        'year': today.year,
-        'predicted_yield_kg': 180000000,  # 180 million kg
-        'confidence_level': 78.5,
-        'prediction_type': 'AI',
-        'region': 'Zimbabwe'
-    }
-    
     context = {
         'stats': stats,
         'recent_transactions': recent_transactions,
-        'fraud_alerts': fraud_alerts,
+        'fraud_alerts': [],
         'volume_trends': json.dumps(volume_trends),
-        'yield_prediction': yield_prediction,
     }
     
     return render(request, 'timb_dashboard/dashboard.html', context)
@@ -127,62 +118,7 @@ def record_transaction_view(request):
                 created_by=request.user,
             )
             
-            # Check for fraud (simple rules-based)
-            fraud_score = 0
-            fraud_reasons = []
-            
-            # Price deviation check
-            if grade.base_price > 0:
-                price_deviation = abs(price_per_kg - grade.base_price) / grade.base_price
-                if price_deviation > 0.3:  # 30% deviation
-                    fraud_score += 0.4
-                    fraud_reasons.append(f'Price deviates {price_deviation*100:.1f}% from base price')
-            
-            # Quantity check
-            if quantity > 10000:  # Very large transaction
-                fraud_score += 0.3
-                fraud_reasons.append('Unusually large quantity')
-            
-            # Same party check
-            if seller == buyer:
-                fraud_score += 0.8
-                fraud_reasons.append('Same seller and buyer')
-            
-            # Update transaction with fraud detection results
-            if fraud_score > 0.5:
-                transaction.is_flagged = True
-                transaction.fraud_score = Decimal(str(fraud_score))
-                transaction.fraud_reasons = fraud_reasons
-                transaction.save()
-                
-                # Create fraud alert
-                SystemAlert.objects.create(
-                    title=f'Potential fraud detected: {transaction.transaction_id}',
-                    message=f'Transaction flagged with {fraud_score*100:.1f}% fraud score. Reasons: {", ".join(fraud_reasons)}',
-                    alert_type='FRAUD',
-                    severity='HIGH' if fraud_score > 0.8 else 'MEDIUM',
-                    transaction=transaction,
-                    metadata={'fraud_score': fraud_score, 'reasons': fraud_reasons}
-                )
-            
-            # Check if override is requested
-            if request.POST.get('override_fraud_detection') == 'true':
-                # Allow transaction but keep fraud flag
-                transaction.save()
-                return JsonResponse({
-                    'success': True,
-                    'transaction_id': transaction.transaction_id,
-                    'message': 'Transaction recorded with fraud flag'
-                })
-            
-            if transaction.is_flagged:
-                return JsonResponse({
-                    'success': False,
-                    'fraud_detected': True,
-                    'confidence': fraud_score,
-                    'risk_factors': fraud_reasons,
-                    'transaction_id': transaction.transaction_id
-                })
+            # AI fraud detection removed; TIMB staff decide legitimacy per policy
             
             return JsonResponse({
                 'success': True,
@@ -257,6 +193,32 @@ def price_monitoring_view(request):
     }
     
     return render(request, 'timb_dashboard/price_monitoring.html', context)
+
+
+@login_required
+@user_passes_test(is_timb_staff)
+def open_market(request):
+    """Open market for all active floors (or selected)."""
+    floor_id = request.GET.get('floor_id')
+    if floor_id:
+        TobaccoFloor.objects.filter(id=floor_id, is_active=True).update(market_open=True)
+    else:
+        TobaccoFloor.objects.filter(is_active=True).update(market_open=True)
+    messages.success(request, 'Market opened')
+    return redirect('timb_dashboard:dashboard')
+
+
+@login_required
+@user_passes_test(is_timb_staff)
+def close_market(request):
+    """Close market for all floors (or selected)."""
+    floor_id = request.GET.get('floor_id')
+    if floor_id:
+        TobaccoFloor.objects.filter(id=floor_id).update(market_open=False)
+    else:
+        TobaccoFloor.objects.update(market_open=False)
+    messages.success(request, 'Market closed')
+    return redirect('timb_dashboard:dashboard')
 
 
 @login_required

@@ -11,7 +11,7 @@ urlpatterns = [
     
     # Inventory Management
     path('inventory/', views.inventory_management, name='merchant_inventory'),
-    path('inventory/add/', views.add_inventory_item, name='merchant_add_inventory'),
+    # Manual inventory add disabled: handled automatically via TIMB transactions
     path('inventory/qr-report/', views.generate_qr_report, name='merchant_generate_qr_report'),
     path('inventory/report/', views.inventory_report, name='merchant_inventory_report'),
     

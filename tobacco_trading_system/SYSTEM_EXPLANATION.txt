@@ -1,0 +1,47 @@
+TIMB Tobacco Trading System - Overview
+
+Scope of this demo build
+- AI modules removed/disabled per policy: risk, side buying, yield prediction, fraud detection
+- Registration disabled: accounts created by superuser/TIMB admins only
+- TIMB regulates all sales. Transactions recorded by TIMB capture: grade, quantity (kg), price, floor
+- Merchant inventory is auto-captured from TIMB transactions. Merchants cannot upload inventory manually
+- Inventory auto-decrements when orders are fulfilled/delivered
+- Live feed/market shows data when market is open. TIMB can open/close market daily
+
+Key flows
+1) TIMB-recorded transaction (timb_dashboard.views.record_transaction_view)
+   - Creates a Transaction with core fields
+   - Signals (timb_dashboard.signals.update_transaction_metrics) auto-add purchased quantity to buyer merchant inventory
+   - Weighted average cost is maintained per grade (+ batch when provided)
+
+2) Merchant inventory (merchant_app.models.MerchantInventory)
+   - Stores quantity, reserved_quantity, average_cost, thresholds, batch/storage metadata
+   - Merchants view-only inventory UI (manual add disabled)
+
+3) Order fulfillment (merchant_app.views.api_order_process)
+   - Decrements on-hand quantity from the selected inventory item
+   - Marks order DELIVERED when filled_quantity >= requested_quantity
+
+4) Live market and feed (realtime_data)
+   - WebSockets/SSE endpoints stream prices and transactions
+   - Views filter to floors where market_open=True
+   - TIMB can open/close via URLs: /timb/market/open and /timb/market/close
+
+Demo data
+- Management command: python manage.py load_demo_data
+  - Creates superuser (if missing), a TIMB staff demo, 3 demo merchants, grades, floors
+  - Opens market and creates sample TIMB-recorded transactions (which auto-populate merchant inventory)
+
+Algorithms retained (high-level)
+- Price statistics aggregation (daily price updates)
+- Inventory weighted average cost on auto-ingest
+- Real-time volatility index (simple change-rate based) for live prices
+
+Security/governance
+- Only authenticated users; TIMB staff gate critical endpoints
+- No self-registration
+- Inventory ingestion only via TIMB transactions
+
+Notes
+- Migrations are required after model changes (market_open on TobaccoFloor; indexes on realtime models)
+- Remove or ignore ai_models app/routes if present

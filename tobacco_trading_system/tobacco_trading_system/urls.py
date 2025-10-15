@@ -10,7 +10,6 @@ urlpatterns = [
     path('auth/', include('authentication.urls')),
     path('timb/', include('timb_dashboard.urls')),
     path('merchant/', include('merchant_app.urls')),
-    path('ai/', include('ai_models.urls')),
     path('realtime/', include('realtime_data.urls')),
 ]
 

@@ -23,10 +23,10 @@ def realtime_dashboard(request):
         'grade', 'floor'
     ).order_by('-last_updated')[:10]
     
-    # Get recent transactions
+    # Get recent transactions (only when market open anywhere)
     recent_transactions = LiveTransaction.objects.select_related(
         'grade', 'floor'
-    ).filter(is_broadcast=True).order_by('-timestamp')[:20]
+    ).filter(is_broadcast=True, floor__market_open=True).order_by('-timestamp')[:20]
     
     # Get active alerts
     active_alerts = MarketAlert.objects.filter(
@@ -64,7 +64,10 @@ def realtime_dashboard(request):
 @require_http_methods(["GET"])
 def api_live_prices(request):
     """API endpoint for live price data"""
-    prices = RealTimePrice.objects.select_related('grade', 'floor').all()
+    # Only broadcast when market is open
+    prices = RealTimePrice.objects.select_related('grade', 'floor').filter(
+        models.Q(floor__market_open=True) | models.Q(floor__isnull=True)
+    )
     
     price_data = []
     for price in prices:

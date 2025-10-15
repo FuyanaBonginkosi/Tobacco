@@ -263,38 +263,27 @@
                         </div>
                     </button>
                     
-                    <a href="{% url 'ai:ai_dashboard' %}" class="block w-full text-left px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-200">
-                        <div class="flex items-center">
-                            <i class="fas fa-robot text-indigo-600 mr-3"></i>
-                            <span class="text-sm font-medium text-gray-900 dark:text-white">AI Dashboard</span>
-                        </div>
-                    </a>
+                    <div class="grid grid-cols-2 gap-2">
+                        <a href="{% url 'timb_dashboard:open_market' %}" class="block w-full text-left px-4 py-3 rounded-lg border border-green-200 hover:bg-green-50 dark:border-green-700 dark:hover:bg-green-900 transition duration-200">
+                            <div class="flex items-center">
+                                <i class="fas fa-door-open text-green-600 mr-3"></i>
+                                <span class="text-sm font-medium text-gray-900 dark:text-white">Open Market</span>
+                            </div>
+                        </a>
+                        <a href="{% url 'timb_dashboard:close_market' %}" class="block w-full text-left px-4 py-3 rounded-lg border border-red-200 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900 transition duration-200">
+                            <div class="flex items-center">
+                                <i class="fas fa-door-closed text-red-600 mr-3"></i>
+                                <span class="text-sm font-medium text-gray-900 dark:text-white">Close Market</span>
+                            </div>
+                        </a>
+                    </div>
+                    
+                    
                 </div>
             </div>
             
             <!-- Yield Prediction -->
-            {% if yield_prediction %}
-            <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                        <i class="fas fa-seedling mr-2 text-green-600"></i>Yield Forecast {{ yield_prediction.year }}
-                    </h3>
-                </div>
-                <div class="p-4">
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                            {{ yield_prediction.predicted_yield_kg|floatformat:0 }} kg
-                        </div>
-                        <div class="text-sm text-gray-500 mb-4">
-                            Confidence: {{ yield_prediction.confidence_level }}%
-                        </div>
-                        <div class="text-xs text-gray-600 dark:text-gray-400">
-                            {{ yield_prediction.prediction_type }} prediction for {{ yield_prediction.region|default:"Zimbabwe" }}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
+            
         </div>
     </div>
     

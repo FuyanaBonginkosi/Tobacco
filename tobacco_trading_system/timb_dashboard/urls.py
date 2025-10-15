@@ -16,6 +16,8 @@ urlpatterns = [
     # Price management
     path('prices/', views.price_monitoring_view, name='price_monitoring'),
     path('update-daily-prices/', views.update_daily_prices, name='update_daily_prices'),
+    path('market/open/', views.open_market, name='open_market'),
+    path('market/close/', views.close_market, name='close_market'),
     
     # Floor management
     path('floors/', views.floor_management_view, name='floor_management'),

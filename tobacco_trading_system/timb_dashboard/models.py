@@ -145,6 +145,7 @@ class TobaccoFloor(models.Model):
     operating_hours = models.JSONField(default=dict)
     coordinates = models.JSONField(default=dict, blank=True)  # lat, lng
     is_active = models.BooleanField(default=True)
+    market_open = models.BooleanField(default=False, help_text="Whether trading is open on this floor")
     created_at = models.DateTimeField(default=timezone.now)
     
     class Meta:

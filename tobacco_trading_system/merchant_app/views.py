@@ -269,39 +269,8 @@ def inventory_management(request):
 @login_required
 @require_http_methods(["POST"])
 def add_inventory_item(request):
-    """Add new inventory item"""
-    if not request.user.is_merchant:
-        return JsonResponse({'success': False, 'error': 'Unauthorized'})
-    
-    try:
-        merchant = request.user.merchant_profile
-        
-        data = json.loads(request.body)
-        
-        # Create inventory item
-        item = MerchantInventory.objects.create(
-            merchant=merchant,
-            grade_id=data['grade_id'],
-            quantity=Decimal(data['quantity']),
-            average_cost=Decimal(data['average_cost']),
-            storage_location=data.get('storage_location', ''),
-            quality_grade=data.get('quality_grade', ''),
-            moisture_content=data.get('moisture_content'),
-            batch_number=data.get('batch_number', ''),
-            minimum_threshold=data.get('minimum_threshold', 100),
-            storage_conditions=data.get('storage_conditions', {})
-        )
-        
-        messages.success(request, f'Added {item.quantity}kg of {item.grade.grade_name} to inventory')
-        
-        return JsonResponse({
-            'success': True,
-            'item_id': item.id,
-            'message': 'Inventory item added successfully'
-        })
-        
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+    """Disabled: inventory is captured automatically from TIMB transactions."""
+    return JsonResponse({'success': False, 'error': 'Manual inventory entry is disabled. Inventory is auto-captured by TIMB transactions.'}, status=403)
 
 
 @login_required
@@ -1010,7 +979,8 @@ def api_order_process(request, order_id):
             inv.quantity -= fill_qty
             inv.save()
             order.filled_quantity += fill_qty
-            order.status = 'READY' if order.filled_quantity >= order.requested_quantity else 'IN_PROGRESS'
+            # When fully delivered, mark delivered and auto-decrement reflected in inventory above
+            order.status = 'DELIVERED' if order.filled_quantity >= order.requested_quantity else 'IN_PROGRESS'
             order.save()
         return JsonResponse({'success': True})
     except (ClientOrder.DoesNotExist, MerchantInventory.DoesNotExist):
